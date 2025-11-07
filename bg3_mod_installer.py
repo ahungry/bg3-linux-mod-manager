@@ -12,7 +12,7 @@ from typing import Dict, List, Optional
 
 
 class BG3ModInstaller:
-    def __init__(self, steam_path = None, steam_userdata_path = None):
+    def __init__(self, steam_path = None, steam_userdata_path = None, linux = False):
         if not steam_path:
             steam_path = Path.home() / ".steam/steam"
         else:
@@ -20,7 +20,11 @@ class BG3ModInstaller:
 
         self.steam_path = steam_path
         self.game_id = "1086940"
-        self.larian_path = self.steam_path / f"steamapps/compatdata/{self.game_id}/pfx/drive_c/users/steamuser/AppData/Local/Larian Studios"
+
+        if linux:
+          self.larian_path = Path("~/.local/share/Larian Studios").expanduser()
+        else:
+          self.larian_path = self.steam_path / f"steamapps/compatdata/{self.game_id}/pfx/drive_c/users/steamuser/AppData/Local/Larian Studios"
 
         if not steam_userdata_path:
             self.steam_userdata = self.steam_path / "userdata"
@@ -31,9 +35,11 @@ class BG3ModInstaller:
         self.profile_modsettings = self.larian_path / "Baldur's Gate 3/PlayerProfiles/Public/modsettings.lsx"
 
         # Check on something that will exist in the most common scenario (a save game)
-        if not os.path.isdir(self.larian_path / "Baldur's Gate 3/PlayerProfiles/Public/Savegames/Story"):
+        save_game_path = self.larian_path / "Baldur's Gate 3/PlayerProfiles/Public/Savegames/Story"
+        if not os.path.isdir(save_game_path):
             print("Game not found, please ensure your Steam path is correct and Baldur's Gate 3 is installed.")
             print(f"Currently set to:\n  {self.steam_path} (change with the '--path' option)")
+            print(f"Currently set to:\n  {save_game_path} (change with the '--path' option)")
             sys.exit(1)
 
 
@@ -259,13 +265,14 @@ def display_menu():
     print("\nBaldur's Gate 3 Mod Manager")
     print("1. Install mod")
     print("2. Remove mod")
-    print("3. Exit")
+    print("3. List mods")
+    print("4. Exit")
     while True:
         try:
-            choice = int(input("\nEnter your choice (1-3): "))
-            if 1 <= choice <= 3:
+            choice = int(input("\nEnter your choice (1-4): "))
+            if 1 <= choice <= 4:
                 return choice
-            print("Please enter a number between 1 and 3")
+            print("Please enter a number between 1 and 4")
         except ValueError:
             print("Please enter a valid number")
 
@@ -275,6 +282,8 @@ def display_installed_mods(mods: List[Dict]):
     for i, mod in enumerate(mods):
         print(f"{i + 1}. {mod['Name']} ({mod['Folder']})")
 
+def display_installed_mods_menu(mods: List[Dict]):
+    display_installed_mods(mods)
     while True:
         try:
             choice = int(input("\nEnter the number of the mod to remove (0 to cancel): "))
@@ -294,8 +303,15 @@ def main():
     parser.add_argument(
         "-u", "--userpath",
         help="Root path for Steam userdata (default: '~/.steam/steam/userdata').")
+    parser.add_argument(
+        "-l", "--linux", action="store_true",
+        help="If using Native Linux (Steam Deck) build rather than Proton/WINE.")
     args = parser.parse_args()
-    installer = BG3ModInstaller(steam_path=args.path, steam_userdata_path=args.userpath)
+    installer = BG3ModInstaller(
+      steam_path=args.path,
+      steam_userdata_path=args.userpath,
+      linux=args.linux,
+    )
 
     while True:
         choice = display_menu()
@@ -314,12 +330,15 @@ def main():
                 print("No mods currently installed.")
                 continue
 
-            mod_index = display_installed_mods(installed_mods)
+            mod_index = display_installed_mods_menu(installed_mods)
             if mod_index is not None:
                 if installer.remove_mod(mod_index):
                     print("Mod removed successfully!")
                 else:
                     print("Failed to remove mod.")
+
+        elif choice == 3:  # List mods
+            display_installed_mods(installer.get_installed_mods())
 
         else:  # Exit
             print("Goodbye!")
